@@ -1,0 +1,17 @@
+{
+  "name": "tactical-voxel-shooter-smoke-server",
+  "version": "0.0.1",
+  "private": true,
+  "description": "WSS smoke server for Phase 0 (G4/G5).",
+  "main": "ws_server.js",
+  "scripts": {
+    "start": "node ws_server.js",
+    "check": "node --check ws_server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

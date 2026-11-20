@@ -1,0 +1,3 @@
+numpy>=1.26
+# openvdb is optional; fallback voxelizer uses pure numpy.
+# trimesh optional for mesh loading; OBJ parser is built-in.

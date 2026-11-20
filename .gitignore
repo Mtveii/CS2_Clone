@@ -1,0 +1,62 @@
+# Godot
+.godot/
+build/
+*.pck
+
+# Exported builds
+export/
+*.x86_64
+*.exe
+*.dmg
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.token
+*.secret
+
+# Private extracted assets (see docs/LEGAL.md)
+assets_private/
+*.vpk
+*.vmap
+*.vmdl_c
+*.vtex_c
+
+# Node
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Documentation / plans / todo lists — не публикуем на GitHub
+*.md
+docs/
+benchmarks/
+PLAN.md
+README.md
+TODO*
+todo*
+*.todo
+TASKS*
+tasks*
+*.plan
+CHANGELOG*
+NOTES*
+notes*
+
+# Benchmark raw logs
+benchmarks/raw/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

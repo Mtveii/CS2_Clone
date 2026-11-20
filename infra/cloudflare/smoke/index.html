@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spike G1/G2 — runtime probe</title>
+  <style>
+    body { font-family: monospace; margin: 2rem; background: #111; color: #ddd; }
+    .ok { color: #6f6; }
+    .bad { color: #f66; }
+    pre { font-size: 1.05rem; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>Spike G1/G2</h1>
+  <p>Проверка cross-origin isolation и runtime перед web-сборкой Godot.</p>
+  <pre id="out">running…</pre>
+  <script>
+    const out = document.getElementById('out');
+    const checks = [
+      ['crossOriginIsolated', self.crossOriginIsolated === true],
+      ['SharedArrayBuffer', typeof SharedArrayBuffer !== 'undefined'],
+      ['WebAssembly', typeof WebAssembly !== 'undefined'],
+      ['WebGL2', (() => { try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; } })()],
+    ];
+    const lines = checks.map(([name, pass]) =>
+      `${pass ? '\u2713' : '\u2717'} ${name} = ${pass}`
+    );
+    lines.push('');
+    lines.push(`userAgent = ${navigator.userAgent}`);
+    out.textContent = lines.join('\n');
+    out.className = checks.every(([, p]) => p) ? 'ok' : 'bad';
+  </script>
+</body>
+</html>

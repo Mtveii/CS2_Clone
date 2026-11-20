@@ -1,0 +1,87 @@
+name: Godot checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Node syntax check
+        run: node --check server/smoke/ws_server.js
+      - name: Map pipeline smoke
+        run: |
+          cd tools/map-pipeline
+          python3 convert_sdf.py --demo-box --output /tmp/box.npy --bounds 8 8 8
+          python3 chunkify.py --input /tmp/box.npy --output-dir /tmp/maptest --voxel-mm 200 --chunk-size 4
+          python3 validate_manifest.py --dir /tmp/maptest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        run: |
+          set -euo pipefail
+          cd /tmp
+          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -sL -o godot.zip "$URL"
+          unzip -oq godot.zip
+          chmod +x "Godot_v${GODOT_VERSION}_linux.x86_64"
+          sudo mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          godot --headless --version
+
+      - name: Import project (parse scenes/scripts)
+        run: |
+          godot --headless --path . --quit-after 5
+          godot --headless --path . --scene res://scenes/spike.tscn --quit-after 2 || true
+          godot --headless --path . --scene res://scenes/net_test.tscn --quit-after 2 || true
+
+      - name: Protocol smoke test
+        run: godot --headless --path . --script res://tests/protocol_smoke.gd
+
+      - name: Voxel smoke test
+        run: godot --headless --path . --script res://tests/voxel_smoke.gd
+
+      - name: Gameplay smoke test
+        run: godot --headless --path . --script res://tests/gameplay_smoke.gd
+
+      - name: Weapons smoke test
+        run: godot --headless --path . --script res://tests/weapons_smoke.gd
+
+      - name: Grenades smoke test
+        run: godot --headless --path . --script res://tests/grenades_smoke.gd
+
+      - name: Destruction smoke test
+        run: godot --headless --path . --script res://tests/destruction_smoke.gd
+
+      - name: Loadout / all-weapons test
+        run: godot --headless --path . --script res://tests/loadout_smoke.gd
+
+      - name: Full integration test
+        run: godot --headless --path . --script res://tests/full_integration_smoke.gd
+
+      - name: Lobby smoke test
+        run: godot --headless --path . --script res://tests/lobby_smoke.gd
+
+      - name: Animation & audio smoke test
+        run: godot --headless --path . --script res://tests/anim_audio_smoke.gd
+
+      - name: Scene import check
+        run: |
+          godot --headless --path . --scene res://scenes/spike.tscn --quit-after 2
+          godot --headless --path . --scene res://scenes/client.tscn --quit-after 2
+
+      - name: GDScript parse check (protocol)
+        run: godot --headless --path . --check-only --script res://shared/protocol/net_protocol.gd
