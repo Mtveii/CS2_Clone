@@ -1,4 +1,4 @@
-name: Godot checks
+name: Checks
 
 on:
   push:
@@ -28,6 +28,9 @@ jobs:
           python3 convert_sdf.py --demo-box --output /tmp/box.npy --bounds 8 8 8
           python3 chunkify.py --input /tmp/box.npy --output-dir /tmp/maptest --voxel-mm 200 --chunk-size 4
           python3 validate_manifest.py --dir /tmp/maptest
+
+  godot:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -42,46 +45,37 @@ jobs:
           sudo mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
           godot --headless --version
 
-      - name: Import project (parse scenes/scripts)
-        run: |
-          godot --headless --path . --quit-after 5
-          godot --headless --path . --scene res://scenes/spike.tscn --quit-after 2 || true
-          godot --headless --path . --scene res://scenes/net_test.tscn --quit-after 2 || true
+      - name: Import project
+        run: godot --headless --path . --quit-after 5
 
       - name: Protocol smoke test
         run: godot --headless --path . --script res://tests/protocol_smoke.gd
-
       - name: Voxel smoke test
         run: godot --headless --path . --script res://tests/voxel_smoke.gd
-
       - name: Gameplay smoke test
         run: godot --headless --path . --script res://tests/gameplay_smoke.gd
-
       - name: Weapons smoke test
         run: godot --headless --path . --script res://tests/weapons_smoke.gd
-
       - name: Grenades smoke test
         run: godot --headless --path . --script res://tests/grenades_smoke.gd
-
       - name: Destruction smoke test
         run: godot --headless --path . --script res://tests/destruction_smoke.gd
-
       - name: Loadout / all-weapons test
         run: godot --headless --path . --script res://tests/loadout_smoke.gd
-
       - name: Full integration test
         run: godot --headless --path . --script res://tests/full_integration_smoke.gd
-
       - name: Lobby smoke test
         run: godot --headless --path . --script res://tests/lobby_smoke.gd
-
       - name: Animation & audio smoke test
         run: godot --headless --path . --script res://tests/anim_audio_smoke.gd
+      - name: Voxel map (Oasis CC0) smoke test
+        run: godot --headless --path . --script res://tests/voxel_map_smoke.gd
+      - name: Client gameplay / buy menu smoke test
+        run: godot --headless --path . --script res://tests/client_smoke.gd
+      - name: Combat / HP / armor / defuse smoke test
+        run: godot --headless --path . --script res://tests/combat_smoke.gd
 
       - name: Scene import check
         run: |
-          godot --headless --path . --scene res://scenes/spike.tscn --quit-after 2
+          godot --headless --path . --scene res://scenes/lobby.tscn --quit-after 2
           godot --headless --path . --scene res://scenes/client.tscn --quit-after 2
-
-      - name: GDScript parse check (protocol)
-        run: godot --headless --path . --check-only --script res://shared/protocol/net_protocol.gd

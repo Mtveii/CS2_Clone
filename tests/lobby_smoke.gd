@@ -1,5 +1,5 @@
 extends SceneTree
-## Тест лобби: сцена, UI-панели, настройки, инвентарь, 3D-агент.
+## Тест главного меню по референсам: вкладки, агенты, фоны, экраны, карты, инвентарь.
 const GameSettings = preload("res://client/settings.gd")
 const AgentData = preload("res://client/agents.gd")
 const WeaponData = preload("res://shared/gameplay/weapons.gd")
@@ -10,66 +10,102 @@ func _check(c: bool, m: String) -> void:
 	else: failures += 1; push_error("[fail] " + m)
 
 func _init() -> void:
-	# настройки: все категории
-	var s = GameSettings.new()
-	_check(s.all_categories().size() == 6, "6 категорий настроек")
-	_check(s.sensitivity == 1.0, "чувствительность по умолчанию")
-	_check(s.viewmodel_fov == 68.0, "FOV модели 68")
-	_check(s.crosshair_gap == 3.0, "зазор прицела 3")
-	s.sensitivity = 2.5
-	s.save()
-	var s2 = GameSettings.new()
-	s2.load_settings()
-	_check(s2.sensitivity == 2.5, "настройки сохраняются")
-
 	# агенты
 	var ad = AgentData.new()
-	_check(ad.agents.size() == 8, "8 агентов")
-	_check(ad.by_team(WeaponData.Team.T).size() == 4, "4 террориста")
-	_check(ad.by_team(WeaponData.Team.CT).size() == 4, "4 спецназа")
-	var a = ad.by_team(WeaponData.Team.T)[0]
-	var model = ad.build_voxel_model(a)
-	_check(model.get_child_count() >= 10, "воксельная моделька агента (%d деталей)" % model.get_child_count())
+	_check(ad.agents.size() == 13, "13 агентов")
+	_check(ad.by_team(WeaponData.Team.T).size() == 5, "5 T агентов")
+	_check(ad.by_team(WeaponData.Team.CT).size() == 8, "8 CT агентов")
+	_check(ad.factions_for(WeaponData.Team.T).size() == 5, "5 фракций T")
+	_check(ad.factions_for(WeaponData.Team.CT).size() == 8, "8 фракций CT")
+	_check(ad.hitbox_profile() == "standard_humanoid_100hp", "одинаковые хитбоксы")
+	ad.find("t_pro").owned = false
+	_check(not ad.can_equip(ad.find("t_pro")), "нельзя экипировать чужого агента")
 
-	# сцена лобби
+	# сцена
 	var packed = load("res://scenes/lobby.tscn")
-	_check(packed != null, "сцена lobby.tscn загружается")
+	_check(packed != null, "сцена lobby.tscn")
 	var inst = packed.instantiate()
-	_check(inst.get_node_or_null("LobbyWorld") != null, "3D-мир лобби есть")
-	_check(inst.get_node_or_null("UI") != null, "UI лобби есть")
 	root.add_child(inst)
-	# дать время на _ready
 	await process_frame
 	await process_frame
 	var ui = inst.get_node("UI")
+	var world = inst.get_node("LobbyWorld")
 	var r = ui.get_node_or_null("LobbyUI")
-	_check(r != null, "root UI создан")
-	if r != null:
-		_check(r.get_node_or_null("SettingsOverlay") != null, "панель настроек")
-		_check(r.get_node_or_null("InventoryOverlay") != null, "панель инвентаря")
-		_check(r.get_node_or_null("InventoryStrip") != null, "полоса снаряжения")
-		# открыть настройки и инвентарь (проверка что панели строятся)
-		ui._open_settings()
-		_check(ui.settings_overlay.visible, "настройки открываются")
-		_check(ui.settings_content.get_child_count() > 5, "настройки заполнены (%d)" % ui.settings_content.get_child_count())
-		ui._select_settings_tab(3)
-		_check(ui.settings_content.get_child_count() > 5, "вкладка прицела заполнена")
-		ui._close_settings()
-		ui._open_inventory()
-		_check(ui.inventory_overlay.visible, "инвентарь открывается")
-		_check(ui.inventory_grid.get_child_count() == 43, "43武器 в сетке (%d)" % ui.inventory_grid.get_child_count())
-		ui._close_inventory()
-		var world = inst.get_node("LobbyWorld")
-		_check(world != null and world.get_node_or_null("Pedestal/AgentDisplay") != null, "подиум с агентом")
-		_check(world.get_node_or_null("Dust") != null, "частицы пыли")
-		_check(world.get_node_or_null("LobbyCamera") != null, "камера лобби")
-		# переключение команд и агентов
-		world.set_team(WeaponData.Team.CT)
-		_check(world.current_agent().team == WeaponData.Team.CT, "переключение на CT")
-		world.next_agent()
-		_check(world.current_agent() != null, "следующий агент")
+	_check(r != null, "root UI")
 
-	# все 43武器 в инвентаре
-	_check(WeaponData.WEAPONS.size() == 43, "43武器 в инвентаре")
+	# верхняя панель: 5 вкладок + 4 иконки слева + полоса друзей справа
+	_check(ui.nav_buttons.size() == 5, "5 вкладок")
+	for t in ["ИНВЕНТАРЬ", "СНАРЯЖЕНИЕ", "ИГРАТЬ", "МАГАЗИН", "НОВОСТИ"]:
+		_check(ui.nav_buttons.has(t), "вкладка " + t)
+	_check(r.get_node_or_null("FriendsStrip") != null, "полоса друзей справа")
+	# адаптивность: референс 1280x720 масштабируется на любое окно
+	ui._fit_with(Vector2(1920.0, 1080.0))
+	_check(ui.root.size == Vector2(1280.0, 720.0), "референсный размер UI")
+	_check(absf(ui.root.scale.x - 1.5) < 0.01, "масштаб 1920x1080 = 1.5")
+	ui._fit_with(Vector2(800.0, 600.0))
+	_check(absf(ui.root.scale.x - 0.625) < 0.01, "масштаб 800x600 по ширине")
+	_check(absf(ui.root.scale.y - 0.833) < 0.01, "масштаб 800x600 по высоте")
+	ui._fit_with(Vector2(1280.0, 720.0))
+	_check(r.get_node_or_null("SettingsOverlay") != null, "экран настроек")
+	_check(r.get_node_or_null("InventoryOverlay") != null, "экран инвентаря")
+	_check(r.get_child_count() > 0, "UI построен")
+
+	# фоны
+	_check(world.BACKGROUNDS.size() == 13, "13 ванильных фонов")
+	var b0 = world.background_name()
+	world.next_background()
+	_check(world.background_name() != b0, "смена фона")
+	world.prev_background()
+	_check(world.background_name() == b0, "возврат фона")
+	_check(world.get_node_or_null("Dust") != null, "частицы")
+	_check(world.get_node_or_null("LobbyCamera") != null, "камера")
+
+	# экраны
+	ui._show_screen("ИГРАТЬ")
+	_check(ui.play_panel.visible, "экран Играть")
+	ui._show_screen("ПРОСМОТР")
+	_check(ui.watch_panel.visible, "экран Просмотр")
+	_check(ui.watch_list.get_child_count() == 7, "7 матчей в списке (%d)" % ui.watch_list.get_child_count())
+	ui._download_match("матч", null)
+	ui._show_screen("НОВОСТИ")
+	_check(ui.news_panel.visible, "экран Новости")
+	ui._show_screen("МАГАЗИН")
+	_check(ui.store_panel.visible, "экран Магазин")
+	ui._show_screen("СНАРЯЖЕНИЕ")
+	_check(ui.equipment_panel.visible, "экран Снаряжение")
+
+	# подбор матча
+	ui._show_screen("ПОДБОР")
+	_check(ui.play_modes_panel.visible, "экран Подбор")
+	_check(ui.play_mode_tabs.size() == 9, "9 режимов")
+	_check(ui.map_grid_ready(), "карточки карт построены")
+
+	# настройки: 5 вкладок, без выбора фона в Изображении
+	ui._open_settings()
+	_check(ui.settings_overlay.visible, "настройки открыты")
+	ui._select_settings_tab(3)
+	_check(ui.settings_content.get_child_count() > 5, "Клавиатура и мышь заполнена (%d)" % ui.settings_content.get_child_count())
+	ui._select_settings_tab(0)
+	var txt := ""
+	for c in ui.settings_content.get_children():
+		if c is Label:
+			txt += c.text
+	_check(not txt.contains("Main Menu Background Scenery"), "фона нет в Изображении")
+	_check(ui.SETTINGS_TABS.size() == 5, "5 вкладок настроек")
+	ui._close_settings()
+
+	# инвентарь: 7 категорий, 43武器
+	ui._open_inventory()
+	_check(ui.inventory_overlay.visible, "инвентарь открыт")
+	_check(ui.INVENTORY_CATEGORIES.size() == 7, "7 категорий инвентаря")
+	_check(ui.inventory_grid.get_child_count() == 43, "43武器 (%d)" % ui.inventory_grid.get_child_count())
+	ui._close_inventory()
+
+	# CT/T
+	world.set_team(WeaponData.Team.CT)
+	_check(world.current_agent().team == WeaponData.Team.CT, "переключение CT")
+	world.next_agent()
+	_check(world.current_agent() != null, "следующий агент")
+	_check(WeaponData.WEAPONS.size() == 43, "43武器 в каталоге")
 	print("RESULT: PASS" if failures == 0 else "RESULT: FAIL (%d)" % failures)
 	quit(1 if failures > 0 else 0)

@@ -1,8 +1,25 @@
 extends Node3D
-## 3D-фон лобби: воксельная платформа, колонны, неоновые полосы, пыль, подиум с агентом.
+## 3D-сцена главного меню: ванильные карты-фоны, агенты CT/T, подиум, частицы.
 
 const AgentData = preload("res://client/agents.gd")
 const WeaponData = preload("res://shared/gameplay/weapons.gd")
+
+# Декоративные версии карт (без геймплея) — только фон меню.
+const BACKGROUNDS: Array = [
+	{"name": "Dust II", "floor": Color(0.32, 0.26, 0.18), "wall": Color(0.45, 0.36, 0.24), "neon": Color(0.95, 0.70, 0.30), "sky": Color(0.20, 0.16, 0.12)},
+	{"name": "Mirage", "floor": Color(0.38, 0.33, 0.25), "wall": Color(0.65, 0.55, 0.38), "neon": Color(0.95, 0.82, 0.45), "sky": Color(0.28, 0.24, 0.18)},
+	{"name": "Nuke", "floor": Color(0.18, 0.20, 0.22), "wall": Color(0.30, 0.34, 0.38), "neon": Color(0.30, 0.70, 0.95), "sky": Color(0.10, 0.12, 0.16)},
+	{"name": "Overpass", "floor": Color(0.25, 0.28, 0.30), "wall": Color(0.38, 0.42, 0.45), "neon": Color(0.40, 0.85, 0.90), "sky": Color(0.14, 0.18, 0.20)},
+	{"name": "Inferno", "floor": Color(0.35, 0.28, 0.20), "wall": Color(0.58, 0.42, 0.28), "neon": Color(1.0, 0.55, 0.20), "sky": Color(0.26, 0.18, 0.12)},
+	{"name": "Ancient", "floor": Color(0.20, 0.30, 0.22), "wall": Color(0.32, 0.45, 0.32), "neon": Color(0.40, 0.95, 0.55), "sky": Color(0.10, 0.20, 0.14)},
+	{"name": "Anubis", "floor": Color(0.36, 0.30, 0.24), "wall": Color(0.68, 0.55, 0.38), "neon": Color(1.0, 0.80, 0.40), "sky": Color(0.30, 0.22, 0.16)},
+	{"name": "Vertigo", "floor": Color(0.20, 0.22, 0.26), "wall": Color(0.32, 0.36, 0.42), "neon": Color(0.35, 0.65, 1.0), "sky": Color(0.08, 0.10, 0.16)},
+	{"name": "Office", "floor": Color(0.28, 0.28, 0.30), "wall": Color(0.45, 0.46, 0.50), "neon": Color(0.70, 0.80, 0.95), "sky": Color(0.16, 0.17, 0.20)},
+	{"name": "Italy", "floor": Color(0.42, 0.35, 0.25), "wall": Color(0.72, 0.60, 0.42), "neon": Color(1.0, 0.85, 0.50), "sky": Color(0.32, 0.26, 0.18)},
+	{"name": "Baggage", "floor": Color(0.24, 0.26, 0.30), "wall": Color(0.38, 0.42, 0.48), "neon": Color(0.45, 0.75, 0.95), "sky": Color(0.12, 0.14, 0.18)},
+	{"name": "Warehouse", "floor": Color(0.26, 0.25, 0.24), "wall": Color(0.40, 0.38, 0.36), "neon": Color(0.95, 0.60, 0.30), "sky": Color(0.16, 0.15, 0.14)},
+	{"name": "Ancient (Night)", "floor": Color(0.12, 0.18, 0.16), "wall": Color(0.18, 0.28, 0.24), "neon": Color(0.30, 0.80, 0.60), "sky": Color(0.04, 0.07, 0.10)},
+]
 
 var agent_view: Node3D
 var agent_display: Node3D
@@ -12,71 +29,89 @@ var time_sec: float = 0.0
 
 var agent_data: AgentData
 var current_agent_index: int = 0
-var current_team: int = 0
+var current_team: int = WeaponData.Team.T
+var bg_index: int = 0
+var bg_root: Node3D
+var lights: Array = []
 
 
 func _ready() -> void:
 	agent_data = AgentData.new()
-	_setup_world()
-	_setup_lights()
+	bg_root = Node3D.new()
+	bg_root.name = "Background"
+	add_child(bg_root)
 	_setup_pedestal()
 	_setup_camera()
 	_setup_particles()
+	set_background(0)
 	set_team(WeaponData.Team.T)
 
 
-func _setup_world() -> void:
-	# пол
+func set_background(index: int) -> void:
+	bg_index = posmod(index, BACKGROUNDS.size())
+	for c in bg_root.get_children():
+		c.queue_free()
+	for l in lights:
+		if is_instance_valid(l):
+			l.queue_free()
+	lights.clear()
+	var cfg: Dictionary = BACKGROUNDS[bg_index]
 	var mat_floor := StandardMaterial3D.new()
-	mat_floor.albedo_color = Color(0.10, 0.11, 0.14)
+	mat_floor.albedo_color = cfg.floor
 	mat_floor.roughness = 0.9
-	_add_box("Floor", Vector3(0, -0.2, 0), Vector3(40, 0.4, 40), mat_floor)
-	# задняя стена
+	_add_bg_box("Floor", Vector3(0, -0.2, 0), Vector3(40, 0.4, 40), mat_floor)
 	var mat_wall := StandardMaterial3D.new()
-	mat_wall.albedo_color = Color(0.07, 0.08, 0.11)
+	mat_wall.albedo_color = cfg.wall
 	mat_wall.roughness = 0.95
-	_add_box("Wall", Vector3(0, 4, -6), Vector3(40, 10, 0.5), mat_wall)
-	# боковые колонны (воксельный стиль)
+	_add_bg_box("Wall", Vector3(0, 4, -6), Vector3(40, 10, 0.5), mat_wall)
 	var mat_pillar := StandardMaterial3D.new()
-	mat_pillar.albedo_color = Color(0.14, 0.16, 0.20)
+	mat_pillar.albedo_color = cfg.wall.darkened(0.35)
 	for x in [-8, -4, 4, 8]:
-		_add_box("Pillar_%d" % int(x), Vector3(x, 3, -4), Vector3(1.2, 6, 1.2), mat_pillar)
-	# неоновые полосы
+		_add_bg_box("Pillar_%d" % int(x), Vector3(x, 3, -4), Vector3(1.2, 6, 1.2), mat_pillar)
 	var mat_neon := StandardMaterial3D.new()
-	mat_neon.albedo_color = Color(0.2, 0.8, 1.0)
-	mat_neon.emission = Color(0.1, 0.6, 1.0)
-	mat_neon.emission_energy = 2.0
+	mat_neon.albedo_color = cfg.neon
+	mat_neon.emission = cfg.neon
+	mat_neon.emission_energy = 1.8
 	for x in [-8, -4, 4, 8]:
-		_add_box("Neon_%d" % int(x), Vector3(x, 3, -3.35), Vector3(0.15, 5.5, 0.05), mat_neon)
-	# полосы на полу
+		_add_bg_box("Neon_%d" % int(x), Vector3(x, 3, -3.35), Vector3(0.15, 5.5, 0.05), mat_neon)
 	for z in [-4, 0, 4]:
-		_add_box("FloorLine_%d" % int(z), Vector3(0, 0.01, z), Vector3(30, 0.02, 0.08), mat_neon)
-	# логотип-блок в стене
-	var mat_logo := StandardMaterial3D.new()
-	mat_logo.albedo_color = Color(0.15, 0.65, 0.9)
-	mat_logo.emission = Color(0.1, 0.4, 0.8)
-	mat_logo.emission_energy = 1.5
-	_add_box("Logo", Vector3(0, 6, -5.7), Vector3(6, 1.2, 0.1), mat_logo)
-
-
-func _setup_lights() -> void:
+		_add_bg_box("FloorLine_%d" % int(z), Vector3(0, 0.01, z), Vector3(30, 0.02, 0.08), mat_neon)
+	_add_bg_box("Logo", Vector3(0, 6, -5.7), Vector3(6, 1.2, 0.1), mat_neon)
+	# свет под цвет карты
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(0.8, 0.85, 1.0)
-	sun.light_energy = 1.2
+	sun.light_color = cfg.neon.lerp(Color.WHITE, 0.5)
+	sun.light_energy = 1.1
 	sun.rotation_degrees = Vector3(-40, 30, 0)
 	add_child(sun)
+	lights.append(sun)
 	var key := OmniLight3D.new()
-	key.light_color = Color(0.3, 0.7, 1.0)
-	key.light_energy = 30.0
+	key.light_color = cfg.neon
+	key.light_energy = 28.0
 	key.omni_range = 14.0
 	key.position = Vector3(0, 4, 2)
 	add_child(key)
+	lights.append(key)
 	var rim := OmniLight3D.new()
-	rim.light_color = Color(1.0, 0.5, 0.2)
-	rim.light_energy = 18.0
+	rim.light_color = cfg.neon.darkened(0.4)
+	rim.light_energy = 16.0
 	rim.omni_range = 10.0
 	rim.position = Vector3(-4, 3, -2)
 	add_child(rim)
+	lights.append(rim)
+	if camera != null:
+		camera.environment = null
+
+
+func next_background() -> void:
+	set_background(bg_index + 1)
+
+
+func prev_background() -> void:
+	set_background(bg_index - 1)
+
+
+func background_name() -> String:
+	return String(BACKGROUNDS[bg_index].name)
 
 
 func _setup_pedestal() -> void:
@@ -87,12 +122,12 @@ func _setup_pedestal() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.16, 0.18, 0.22)
 	mat.metallic = 0.4
-	_add_box_child(pedestal, "Base", Vector3(0, 0.1, 0), Vector3(2.4, 0.2, 2.4), mat)
+	_add_child_box(pedestal, "Base", Vector3(0, 0.1, 0), Vector3(2.4, 0.2, 2.4), mat)
 	var mat_ring := StandardMaterial3D.new()
 	mat_ring.albedo_color = Color(0.2, 0.8, 1.0)
 	mat_ring.emission = Color(0.1, 0.6, 1.0)
 	mat_ring.emission_energy = 2.0
-	_add_box_child(pedestal, "Ring", Vector3(0, 0.21, 0), Vector3(2.5, 0.04, 2.5), mat_ring)
+	_add_child_box(pedestal, "Ring", Vector3(0, 0.21, 0), Vector3(2.5, 0.04, 2.5), mat_ring)
 	agent_display = Node3D.new()
 	agent_display.name = "AgentDisplay"
 	agent_display.position = Vector3(0, 0.22, 0)
@@ -111,26 +146,25 @@ func _setup_particles() -> void:
 	var dust := CPUParticles3D.new()
 	dust.name = "Dust"
 	dust.position = Vector3(0, 3, 0)
-	dust.amount = 120
+	dust.amount = 90
 	dust.lifetime = 8.0
 	dust.emitting = true
 	dust.direction = Vector3(0, -1, 0)
 	dust.spread = 45.0
-	dust.gravity = Vector3(0, -0.05, 0)
 	dust.initial_velocity_min = 0.05
 	dust.initial_velocity_max = 0.2
 	dust.scale_amount_min = 0.02
 	dust.scale_amount_max = 0.05
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.6, 0.8, 1.0, 0.35)
+	mat.albedo_color = Color(0.6, 0.8, 1.0, 0.3)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	var quad := QuadMesh.new()
 	quad.size = Vector2(1, 1)
 	dust.mesh = quad
 	dust.material_override = mat
-	var box_shape := BoxMesh.new()
-	box_shape.size = Vector3(14, 6, 10)
-	dust.emission_box_extents = box_shape.size * 0.5
+	var shape := BoxMesh.new()
+	shape.size = Vector3(14, 6, 10)
+	dust.emission_box_extents = shape.size * 0.5
 	add_child(dust)
 
 
@@ -139,8 +173,14 @@ func set_team(team: int) -> void:
 	var list: Array = agent_data.by_team(team)
 	if list.is_empty():
 		return
+	# показывать экипированного агента, если он есть
+	var eq = agent_data.equipped(team)
 	current_agent_index = 0
-	_show_agent(list[0])
+	for i in range(list.size()):
+		if list[i].id == eq.id:
+			current_agent_index = i
+			break
+	_show_agent(list[current_agent_index])
 
 
 func next_agent() -> void:
@@ -185,11 +225,11 @@ func _process(delta: float) -> void:
 		camera.look_at(Vector3(0, 1.1, 0), Vector3.UP)
 
 
-func _add_box(name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
-	_add_box_child(self, name, pos, size, mat)
+func _add_bg_box(name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
+	_add_child_box(bg_root, name, pos, size, mat)
 
 
-func _add_box_child(parent: Node3D, name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
+func _add_child_box(parent: Node3D, name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = name
 	var box := BoxMesh.new()

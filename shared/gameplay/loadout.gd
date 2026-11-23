@@ -39,6 +39,8 @@ var money: int = 800
 var slots: Dictionary = {}          # Slot -> WeaponInstance
 var selected: int = Slot.SECONDARY
 var knife_skin: String = "Default"
+var armor: int = 0
+var helmet: bool = false
 
 
 func _init(player_team: int = _W.Team.ANY, start_money: int = 800) -> void:
@@ -202,3 +204,17 @@ func all_weapon_ids() -> Array:
 func reset_for_round() -> void:
 	## Сохраняет купленное, если игрок выжил (упрощённо: сохраняем всё).
 	pass
+
+
+func buy_armor(with_helmet: bool) -> bool:
+	## Kevlar $650, Kevlar+шлем $1000. Не покупать, если уже полная.
+	var price: int = 1000 if with_helmet else 650
+	if money < price:
+		return false
+	if armor >= 100 and (not with_helmet or helmet):
+		return false
+	money -= price
+	armor = 100
+	if with_helmet:
+		helmet = true
+	return true

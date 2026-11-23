@@ -60,3 +60,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Reference screenshots (не публикуем)
+referens/
+
+# Локальный Godot (скачивается скриптом)
+tools/godot/

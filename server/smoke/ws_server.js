@@ -190,7 +190,7 @@ function writeI16(b, o, v) { writeU16(b, o, v & 0xFFFF); }
 function writeU32(b, o, v) { b[o] = v & 0xFF; b[o + 1] = (v >> 8) & 0xFF; b[o + 2] = (v >> 16) & 0xFF; b[o + 3] = (v >>> 24) & 0xFF; }
 function writeI32(b, o, v) { writeU32(b, o, v >>> 0); }
 
-const MSG = { INPUT: 1, SNAPSHOT: 2, VOXEL_OP: 3, CHUNK_CHECKSUM: 4, CHUNK_RESYNC: 5, HELLO: 6, EDIT_ACK: 7, EDIT_REJECT: 8 };
+const MSG = { INPUT: 1, SNAPSHOT: 2, VOXEL_OP: 3, CHUNK_CHECKSUM: 4, CHUNK_RESYNC: 5, HELLO: 6, EDIT_ACK: 7, EDIT_REJECT: 8, DAMAGE: 9 };
 const VOXEL_OP_TYPE = { SPHERE_SUBTRACT: 1, RAY_SUBTRACT: 2, BOX_SUBTRACT: 3 };
 const REJECT = { BEDROCK: 1, RATE_LIMIT: 2, INVALID: 3, OUT_OF_RANGE: 4 };
 
@@ -204,6 +204,7 @@ function makeClient(ws) {
 		ws,
 		name: 'player',
 		helloed: false,
+		hp: 100, armor: 0, helmet: false, alive: true, next_fire_ms: 0,
 		x: 0, y: 1.6 * 1000, z: 0, // mm
 		vx: 0, vy: 0, vz: 0,
 		yaw: 0, pitch: 0,
@@ -257,6 +258,41 @@ function handleInput(c, buf) {
 	c.moveZ = moveZ;
 	c.yaw = yaw;
 	c.pitch = pitch;
+	if ((buttons & 4) !== 0) tryFire(c);
+}
+
+function tryFire(c) {
+	const now = Date.now();
+	if (now < c.next_fire_ms) return;
+	c.next_fire_ms = now + 100;
+	let target = null;
+	let best = 3000 * 3000; // 30 m in mm^2
+	for (const [ws2, other] of clients) {
+		if (other === c || !other.helloed || !other.alive) continue;
+		const dx = other.x - c.x, dy = other.y - c.y, dz = other.z - c.z;
+		const d2 = dx * dx + dy * dy + dz * dz;
+		const yawRad = (c.yaw / 65536) * Math.PI * 2;
+		const fx = -Math.sin(yawRad), fz = -Math.cos(yawRad);
+		const len = Math.sqrt(dx * dx + dz * dz) || 1;
+		const dot = (dx / len) * fx + (dz / len) * fz;
+		if (d2 < best && dot > 0.85) { best = d2; target = other; }
+	}
+	if (!target) return;
+	let dmg = 36;
+	if (target.armor > 0) {
+		dmg = Math.round(dmg * 0.775);
+		target.armor = Math.max(0, target.armor - 3);
+	}
+	target.hp = Math.max(0, target.hp - dmg);
+	if (target.hp === 0) target.alive = false;
+	const out = Buffer.alloc(1 + 4 + 4 + 2 + 2);
+	let o = 0;
+	out[o++] = MSG.DAMAGE;
+	writeU32(out, o, c.id); o += 4;
+	writeU32(out, o, target.id); o += 4;
+	writeU16(out, o, target.hp); o += 2;
+	writeU16(out, o, target.armor); o += 2;
+	send(target.ws, out);
 }
 
 function handleVoxelOp(ws, c, buf) {
@@ -461,7 +497,7 @@ function buildSnapshot() {
 		writeI32(buf, o, c.yaw); o += 4;
 		writeI32(buf, o, c.pitch); o += 4;
 		writeU16(buf, o, c.onGround ? 1 : 0); o += 2;
-		writeU16(buf, o, 100); o += 2; // health placeholder
+		writeU16(buf, o, c.hp); o += 2; // health
 	}
 	return buf;
 }

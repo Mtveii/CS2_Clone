@@ -1,0 +1,5 @@
+Oasis voxel map
+Source: https://github.com/Phyronnaz/VoxelAssets/tree/master/Oasis
+Author: Hard Cover (@hcvoxel)
+License: CC0 1.0 Universal (public domain)
+Converted to VMAP by tools/map-pipeline/vox_to_map.py (scale 3, Z-up -> Y-up).
