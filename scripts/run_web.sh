@@ -17,6 +17,15 @@ KEY="$BUILD_DIR/key.pem"
 GODOT_LOCAL="$ROOT/tools/godot/godot"
 GODOT_URL="https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip"
 
+# --- освободить порты от предыдущего запуска ---
+free_stale() {
+  for pattern in "scripts/serve_web.py" "scripts/redirect_http.py" "server/smoke/ws_server.js"; do
+    pkill -f "$pattern" 2>/dev/null || true
+  done
+}
+free_stale
+trap 'free_stale' EXIT
+
 TAIL_IP="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep '^100\.' | head -n 1 || true)"
 if [[ -z "$TAIL_IP" ]]; then TAIL_IP="127.0.0.1"; fi
 PUBLIC_URL="https://${TAIL_IP}:${HTTPS_PORT}/"
@@ -45,6 +54,7 @@ fi
 echo "==> Экспорт web в build/ ..."
 mkdir -p "$BUILD_DIR"
 "$GODOT" --headless --path "$ROOT" --export-release "Web" "$BUILD_DIR/index.html"
+python3 "$ROOT/scripts/patch_web.py" "$BUILD_DIR/index.html"
 cp "$ROOT/infra/cloudflare/_headers" "$BUILD_DIR/_headers"
 echo "==> Экспорт готов"
 

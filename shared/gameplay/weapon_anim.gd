@@ -7,6 +7,7 @@ extends RefCounted
 const _W = preload("res://shared/gameplay/weapons.gd")
 
 enum State { IDLE, FIRE, RELOAD, DEPLOY, INSPECT, MELEE, SWITCH, PLANT, DEFUSE }
+enum MotionState { IDLE, WALK, RUN }
 
 # Реальные тайминги перезарядки CS2 (сек), источник: steam guide + tradeit 2026.
 const RELOAD_TIMES: Dictionary = {
@@ -34,6 +35,8 @@ var weapon_id: int = 20         # AK47 по умолчанию
 var shots_fired: int = 0
 var recoil: Vector2 = Vector2.ZERO
 var recovery_left: float = 0.0
+var motion_state: int = MotionState.IDLE
+var motion_speed: float = 0.0
 
 # Выходные трансформы для viewmodel.
 var pos_offset: Vector3 = Vector3.ZERO
@@ -41,10 +44,10 @@ var rot_offset: Vector3 = Vector3.ZERO
 var fov_offset: float = 0.0
 var events: Array = []          # очищается каждый tick
 
-var deploy_time: float = 0.85
+var deploy_time: float = 0.30
 var inspect_time: float = 3.2
 var melee_time: float = 0.65
-var switch_time: float = 0.45
+var switch_time: float = 0.25
 var plant_time: float = 3.2
 var defuse_time: float = 5.0
 
@@ -58,6 +61,34 @@ func set_weapon(id: int) -> void:
 
 func reload_duration() -> float:
 	return float(RELOAD_TIMES.get(weapon_id, 2.5))
+
+
+func cancel_action() -> void:
+	## Сброс текущего one-shot (например, отмена перезарядки при смене оружия).
+	state = State.IDLE
+	sub_phase = 0
+	timer = 0.0
+
+
+func equip(id: int) -> void:
+	## Смена оружия прерывает всё текущее состояние и запускает equip 0.2–0.4с.
+	set_weapon(id)
+	state = State.DEPLOY
+	timer = deploy_time
+	pos_offset = Vector3.ZERO
+	rot_offset = Vector3.ZERO
+	events.append("equip")
+
+
+func update_motion(speed_u: float) -> void:
+	## Отдельный от one-shot состояний слой движения: IDLE ↔ WALK ↔ RUN.
+	motion_speed = speed_u
+	if speed_u < 30.0:
+		motion_state = MotionState.IDLE
+	elif speed_u < 180.0:
+		motion_state = MotionState.WALK
+	else:
+		motion_state = MotionState.RUN
 
 
 func reset() -> void:
@@ -141,10 +172,15 @@ func request_defuse() -> bool:
 
 func tick(dt: float) -> void:
 	events.clear()
-	# восстановление отдачи
+	# Восстановление отдачи. Важно доводить её до нуля, а не только пока
+	# идёт recovery_left, иначе после выстрелов остаётся постоянный сдвиг
+	# viewmodel («тряска»/перекос оружия).
 	if recovery_left > 0.0:
 		recovery_left = maxf(recovery_left - dt, 0.0)
+	if recovery_left > 0.0 or recoil.length() > 0.001:
 		recoil = recoil.lerp(Vector2.ZERO, clampf(dt * 6.0, 0.0, 1.0))
+		if recoil.length() < 0.001:
+			recoil = Vector2.ZERO
 
 	if state == State.IDLE:
 		pos_offset = Vector3(0, sin(timer * 2.0) * 0.002, 0)
@@ -184,6 +220,7 @@ func tick(dt: float) -> void:
 				rot_offset = Vector3(-0.25 * (1.0 - t), 0, -0.15)
 			if timer <= 0:
 				events.append("reload_bolt")
+				events.append("reload_done")
 				state = State.IDLE
 				sub_phase = 0
 				timer = 0.0

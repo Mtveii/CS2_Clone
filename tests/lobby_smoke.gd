@@ -27,28 +27,38 @@ func _init() -> void:
 	var inst = packed.instantiate()
 	root.add_child(inst)
 	await process_frame
+	root.size = Vector2(1280.0, 720.0)
 	await process_frame
 	var ui = inst.get_node("UI")
 	var world = inst.get_node("LobbyWorld")
 	var r = ui.get_node_or_null("LobbyUI")
 	_check(r != null, "root UI")
 
-	# верхняя панель: 5 вкладок + 4 иконки слева + полоса друзей справа
-	_check(ui.nav_buttons.size() == 5, "5 вкладок")
-	for t in ["ИНВЕНТАРЬ", "СНАРЯЖЕНИЕ", "ИГРАТЬ", "МАГАЗИН", "НОВОСТИ"]:
+	# верхняя панель: 4 вкладки как в CS + 4 иконки слева + полоса друзей справа
+	_check(ui.nav_buttons.size() == 4, "4 вкладки")
+	for t in ["ИГРАТЬ", "ПРОСМОТР", "ИНВЕНТАРЬ", "МАГАЗИН"]:
 		_check(ui.nav_buttons.has(t), "вкладка " + t)
 	_check(r.get_node_or_null("FriendsStrip") != null, "полоса друзей справа")
-	# адаптивность: референс 1280x720 масштабируется на любое окно
+	# адаптивность: FULL_RECT + stretch/expand, без двойного scale
+	_check(ui.get_viewport().get_visible_rect().size == Vector2(1280.0, 720.0), "референс 1280x720")
+	_check(ui.root.size == Vector2(1280.0, 720.0), "root занимает весь viewport")
 	ui._fit_with(Vector2(1920.0, 1080.0))
-	_check(ui.root.size == Vector2(1280.0, 720.0), "референсный размер UI")
-	_check(absf(ui.root.scale.x - 1.5) < 0.01, "масштаб 1920x1080 = 1.5")
+	_check(ui.root.scale == Vector2.ONE, "UI не масштабируется повторно")
+	_check(ui.root.scale == Vector2.ONE, "UI не масштабируется повторно")
 	ui._fit_with(Vector2(800.0, 600.0))
-	_check(absf(ui.root.scale.x - 0.625) < 0.01, "масштаб 800x600 по ширине")
-	_check(absf(ui.root.scale.y - 0.833) < 0.01, "масштаб 800x600 по высоте")
+	_check(ui.root.scale == Vector2.ONE, "нет двойного масштаба 800x600")
 	ui._fit_with(Vector2(1280.0, 720.0))
 	_check(r.get_node_or_null("SettingsOverlay") != null, "экран настроек")
 	_check(r.get_node_or_null("InventoryOverlay") != null, "экран инвентаря")
 	_check(r.get_child_count() > 0, "UI построен")
+
+	# сквозной путь игрока: ИГРАТЬ -> ПОДБОР -> назад
+	ui._show_screen("ИГРАТЬ")
+	_check(ui.play_start_button != null, "кнопка ИГРАТЬ на главном экране")
+	ui.play_start_button.pressed.emit()
+	_check(ui.current_screen == "ПОДБОР" and ui.play_modes_panel.visible, "кнопка ИГРАТЬ открывает подбор")
+	ui.play_modes_back.pressed.emit()
+	_check(ui.current_screen == "ИГРАТЬ" and ui.play_panel.visible, "назад возвращает на главный экран")
 
 	# фоны
 	_check(world.BACKGROUNDS.size() == 13, "13 ванильных фонов")
@@ -65,7 +75,8 @@ func _init() -> void:
 	_check(ui.play_panel.visible, "экран Играть")
 	ui._show_screen("ПРОСМОТР")
 	_check(ui.watch_panel.visible, "экран Просмотр")
-	_check(ui.watch_list.get_child_count() == 7, "7 матчей в списке (%d)" % ui.watch_list.get_child_count())
+	_check(ui.watch_empty and ui.watch_list.get_child_count() == 1,
+		"Просмотр показывает пустое состояние, а не фейковые матчи (%d)" % ui.watch_list.get_child_count())
 	ui._download_match("матч", null)
 	ui._show_screen("НОВОСТИ")
 	_check(ui.news_panel.visible, "экран Новости")
@@ -79,6 +90,12 @@ func _init() -> void:
 	_check(ui.play_modes_panel.visible, "экран Подбор")
 	_check(ui.play_mode_tabs.size() == 9, "9 режимов")
 	_check(ui.map_grid_ready(), "карточки карт построены")
+	var real_maps: int = 0
+	for m in ui.MAP_GROUPS:
+		if FileAccess.file_exists("res://assets/maps/" + String(m.get("file", ""))):
+			real_maps += 1
+	_check(real_maps > 0 and real_maps == ui.MAP_GROUPS.size(),
+			"в списке только реально существующие карты (%d)" % real_maps)
 
 	# настройки: 5 вкладок, без выбора фона в Изображении
 	ui._open_settings()
@@ -99,7 +116,9 @@ func _init() -> void:
 	_check(ui.inventory_overlay.visible, "инвентарь открыт")
 	_check(ui.INVENTORY_CATEGORIES.size() == 7, "7 категорий инвентаря")
 	_check(ui.inventory_grid.get_child_count() == 43, "43武器 (%d)" % ui.inventory_grid.get_child_count())
-	ui._close_inventory()
+	_check(ui.inventory_close != null, "кнопка закрытия инвентаря")
+	ui.inventory_close.pressed.emit()
+	_check(not ui.inventory_overlay.visible, "инвентарь закрывается кнопкой")
 
 	# CT/T
 	world.set_team(WeaponData.Team.CT)

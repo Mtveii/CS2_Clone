@@ -205,7 +205,7 @@ function makeClient(ws) {
 		name: 'player',
 		helloed: false,
 		hp: 100, armor: 0, helmet: false, alive: true, next_fire_ms: 0,
-		x: 0, y: 1.6 * 1000, z: 0, // mm
+		x: 0, y: 604, z: 0, // mm (уровень пола Oasis у спавна)
 		vx: 0, vy: 0, vz: 0,
 		yaw: 0, pitch: 0,
 		onGround: false,
@@ -266,7 +266,7 @@ function tryFire(c) {
 	if (now < c.next_fire_ms) return;
 	c.next_fire_ms = now + 100;
 	let target = null;
-	let best = 3000 * 3000; // 30 m in mm^2
+	let best = 5000 * 5000; // 50 m in mm^2
 	for (const [ws2, other] of clients) {
 		if (other === c || !other.helloed || !other.alive) continue;
 		const dx = other.x - c.x, dy = other.y - c.y, dz = other.z - c.z;
@@ -428,16 +428,16 @@ function handleChunkResyncRequest(ws, cx, cy, cz) {
 }
 
 // ---- Movement sim ----
-const GRAVITY_MM_S2 = -9800 * 1000; // mm/s^2 (scaled)
-const MOVE_SPEED_MM_S = 4500 * 10; // mm/s
-const JUMP_VEL_MM_S = 4000 * 10;
+const GRAVITY_MM_S2 = -9800; // mm/s^2 (9.8 m/s^2)
+const MOVE_SPEED_MM_S = 250 * 19.05; // mm/s (CS2 run speed)
+const JUMP_VEL_MM_S = 301.76 * 19.05;
 
 function stepClient(c, dt) {
 	if (!c.helloed) return;
 	// movement direction from yaw + moveX/moveZ
 	const yawRad = (c.yaw / 65536.0) * Math.PI * 2;
-	const fx = Math.sin(yawRad);
-	const fz = Math.cos(yawRad);
+	const fx = -Math.sin(yawRad);
+	const fz = -Math.cos(yawRad);
 	const rx = Math.cos(yawRad);
 	const rz = -Math.sin(yawRad);
 	const mx = (c.moveX / 32767.0);
@@ -458,7 +458,7 @@ function stepClient(c, dt) {
 	c.y += c.vy * dt;
 	c.z += c.vz * dt;
 	// clamp to bounds
-	const minY = BOUNDS.min.y * VOXEL_SIZE_MM;
+	const minY = 604; // пол карты у спавна; smoke-сервер не грузит Oasis
 	const maxY = (BOUNDS.max.y - 1) * VOXEL_SIZE_MM;
 	if (c.y < minY) { c.y = minY; c.vy = 0; c.onGround = true; }
 	if (c.y > maxY) { c.y = maxY; c.vy = 0; }

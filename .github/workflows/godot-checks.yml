@@ -22,6 +22,13 @@ jobs:
           node-version: '22'
       - name: Node syntax check
         run: node --check server/smoke/ws_server.js
+      - name: Server damage / fire roundtrip
+        run: |
+          GAME_SERVER_PORT=7777 node server/smoke/ws_server.js &
+          SRV=$!
+          sleep 1
+          GAME_SERVER_PORT=7777 node server/smoke/test_damage.js
+          kill $SRV
       - name: Map pipeline smoke
         run: |
           cd tools/map-pipeline
@@ -66,6 +73,10 @@ jobs:
         run: godot --headless --path . --script res://tests/full_integration_smoke.gd
       - name: Lobby smoke test
         run: godot --headless --path . --script res://tests/lobby_smoke.gd
+      - name: UI layout / web-adaptation smoke test
+        run: godot --headless --path . --script res://tests/ui_layout_smoke.gd
+      - name: Navigation smoke test
+        run: godot --headless --path . --script res://tests/navigation_smoke.gd
       - name: Animation & audio smoke test
         run: godot --headless --path . --script res://tests/anim_audio_smoke.gd
       - name: Voxel map (Oasis CC0) smoke test

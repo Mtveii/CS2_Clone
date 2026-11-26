@@ -1,0 +1,15 @@
+CC0 1.0 Universal — public domain, commercial use allowed, attribution optional.
+
+attacker.glb — "Attacker Heavy Trooper Aiming (Arctic Station FPS Kit)"
+  31,606 triangles, ~0.86 x 1.84 x 1.32 m, static posed figure.
+  Source: https://3dassets.dev/assets/arctic-station-fps-kit-attacker-heavy-aiming-aa56f5b6
+  Direct: https://cdn.3dassets.dev/assets/28525/v1/model.glb
+
+defender.glb — "Defender Light Operator Aiming (Arctic Station FPS Kit)"
+  29,152 triangles, ~0.76 x 1.72 x 1.06 m, static posed figure.
+  Source: https://3dassets.dev/assets/arctic-station-fps-kit-defender-light-aiming-cc4028a8
+  Direct: https://cdn.3dassets.dev/assets/28515/v1/model.glb
+
+Both files were re-encoded from KHR_mesh_quantization to plain float32 with
+scripts/dequantize_glb.py so Godot 4.7 can import them. Original licence:
+https://creativecommons.org/publicdomain/zero/1.0/

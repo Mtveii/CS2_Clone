@@ -25,6 +25,7 @@ enum MsgType {
 	HELLO = 6,
 	EDIT_ACK = 7,
 	EDIT_REJECT = 8,
+	DAMAGE = 9,
 }
 
 enum VoxelOpType {

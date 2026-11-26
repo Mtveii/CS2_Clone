@@ -3,11 +3,20 @@ extends RefCounted
 
 const _VC = preload("res://shared/voxel/voxel_constants.gd")
 const _VW = preload("res://shared/voxel/voxel_world.gd")
+const _VM = preload("res://shared/voxel/voxel_material.gd")
 ## Surface-nets mesher for a chunk of a _VW.
 ## Produces an ArrayMesh from the SDF field. No large lookup tables required.
 
 const SURFACE_NETS: int = 0
 const BLOCKY: int = 1
+
+# Куда смотреть от ячейки поверхности, чтобы найти материал (без аллокаций на вершину).
+const _MAT_PROBES: Array = [
+	Vector3i.ZERO,
+	Vector3i(0, -1, 0), Vector3i(0, 1, 0),
+	Vector3i(-1, 0, 0), Vector3i(1, 0, 0),
+	Vector3i(0, 0, -1), Vector3i(0, 0, 1),
+]
 
 
 static func build(world: _VW, chunk_coords: Vector3i, mode: int = SURFACE_NETS) -> ArrayMesh:
@@ -40,6 +49,7 @@ static func _build_surface_nets(world: _VW, cc: Vector3i) -> ArrayMesh:
 
 	var vertices: PackedVector3Array = PackedVector3Array()
 	var normals: PackedVector3Array = PackedVector3Array()
+	var colors: PackedColorArray = PackedColorArray()
 
 	var scale: float = float(world.voxel_size_mm) / 1000.0
 
@@ -99,6 +109,7 @@ static func _build_surface_nets(world: _VW, cc: Vector3i) -> ArrayMesh:
 				vertices.append(world_vertex * scale)
 				var nrm: Vector3 = _gradient(world, origin + Vector3i(kx, ky, kz))
 				normals.append(nrm)
+				colors.append(_surface_color(world, origin + Vector3i(kx, ky, kz), world_vertex))
 				cell_index[kx + ky * cs + kz * cs * cs] = vi
 
 	# Connect adjacent surface cells with triangles.
@@ -132,10 +143,32 @@ static func _build_surface_nets(world: _VW, cc: Vector3i) -> ArrayMesh:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_INDEX] = indices
 	if vertices.size() > 0 and indices.size() > 0:
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
+
+
+# Цвет поверхности берём у ближайшего твёрдого вокселя, чтобы стены/пол
+# были разными (бетон/дерево), а не одним «коричневым ничем».
+static func _surface_color(world: _VW, cell: Vector3i, world_pos: Vector3) -> Color:
+	var mat_id: int = 0
+	for off in _MAT_PROBES:
+		var p: Vector3i = cell + (off as Vector3i)
+		if world.get_sdf_voxel(p) <= _VC.SOLID_THRESHOLD:
+			var m: int = world.get_voxel_material(p)
+			if m != 0:
+				mat_id = m
+				break
+	if mat_id == 0:
+		mat_id = _VM.MaterialId.CONCRETE
+	var base: Color = _VM.get_material(mat_id).get("color", Color(0.6, 0.6, 0.62))
+	# Детерминированная лёгкая вариация оттенка на воксель, чтобы не было «пластика».
+	var h: float = sin(world_pos.x * 12.9898 + world_pos.y * 78.233 + world_pos.z * 37.719) * 43758.5453
+	var frac: float = h - floor(h)
+	var shade: float = 0.86 + 0.18 * frac
+	return Color(base.r * shade, base.g * shade, base.b * shade, 1.0)
 
 
 static func _gradient(world: _VW, v: Vector3i) -> Vector3:
