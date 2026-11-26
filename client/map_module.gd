@@ -8,7 +8,9 @@ var attached_scenes: Array = []
 
 
 func _ready() -> void:
-	get_tree().scene_changed.connect(_on_scene_changed)
+	# Игровая сцена сама грузит выбранную карту; автоподключение дубликатов
+	# мешает работе и нагружает браузер.
+	pass
 
 
 func _on_scene_changed(scene_root: Node) -> void:

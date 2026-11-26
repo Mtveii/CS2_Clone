@@ -96,6 +96,7 @@ var watch_actions: HBoxContainer
 var watch_tab: String = "ВАШИ МАТЧИ"
 var watch_tabs: Dictionary = {}
 var play_map_grid: GridContainer = null
+var selected_map_id: String = "oasis"
 var play_mode_tabs: Array = []
 var play_start_button: Button
 var play_modes_back: Button
@@ -146,6 +147,9 @@ func _ready() -> void:
 	settings = GameSettings.new()
 	settings.load_settings()
 	loadout = Loadout.new(WeaponData.Team.T, 16000)
+	var map_cfg := ConfigFile.new()
+	if map_cfg.load("user://selected_map.cfg") == OK:
+		selected_map_id = String(map_cfg.get_value("map", "id", "oasis"))
 	world = get_parent().get_node_or_null("LobbyWorld")
 	if world != null:
 		agent_data = world.agent_data
@@ -702,6 +706,15 @@ func _select_tab(tab: String) -> void:
 
 func _set_status(msg: String) -> void:
 	status_label.text = msg
+
+
+func _select_map(map_name: String) -> void:
+	selected_map_id = map_name
+	var cfg := ConfigFile.new()
+	cfg.set_value("map", "id", map_name)
+	cfg.save("user://selected_map.cfg")
+	_build_map_grid()
+	_set_status("Карта выбрана: " + map_name)
 
 
 func _launch_game(msg: String) -> void:
@@ -1470,6 +1483,14 @@ func _build_map_grid() -> void:
 			v.add_child(_label("CC BY-ND — без конвертации", 10, C_WARN))
 		else:
 			v.add_child(_label(String(m.group) + "   ◷ " + String(m.wait), 10, C_DIM))
+			var click := Button.new()
+			click.name = "Select_" + String(m.get("name", "map"))
+			click.set_anchors_preset(Control.PRESET_FULL_RECT)
+			click.flat = true
+			click.modulate = Color(1, 1, 1, 0.001)
+			var map_name: String = String(m.get("name", "Oasis"))
+			click.pressed.connect(func(): _select_map(map_name))
+			card.add_child(click)
 		play_map_grid.add_child(card)
 
 

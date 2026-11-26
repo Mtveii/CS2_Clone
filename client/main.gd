@@ -16,6 +16,7 @@ const VoxelMapLoader = preload("res://shared/voxel/voxel_map_loader.gd")
 const GameHUD = preload("res://client/game_hud.gd")
 const PlayerState = preload("res://shared/gameplay/player_state.gd")
 const WeaponViewModelScript = preload("res://client/weapon_viewmodel.gd")
+const GrenadeSystem = preload("res://shared/gameplay/grenades.gd")
 
 const VIEWMODEL_BASE := Vector3(0.28, -0.25, -0.55)
 
@@ -48,6 +49,9 @@ var vm_look: Vector2 = Vector2.ZERO
 var vm_sway: Vector2 = Vector2.ZERO
 var vm_pos_smooth: Vector3 = VIEWMODEL_BASE
 var vm_rot_smooth: Vector3 = Vector3.ZERO
+var selected_map: String = "oasis"
+var grenades = null
+var grenade_meshes: Dictionary = {}
 
 
 func _ready() -> void:
@@ -56,8 +60,13 @@ func _ready() -> void:
 	_setup_mesh()
 	_setup_camera()
 	_resolve_server_url()
+	grenades = GrenadeSystem.new()
 	movement = MovementModel.new()
-	var spawn_u := Vector3(0.0, ground_u_at(Vector3(0, 0, 0)) + 0.2, 0.0)
+	var spawn_u := _spawn_u_from_config()
+	if spawn_u == Vector3.ZERO:
+		spawn_u = Vector3(0.0, ground_u_at(Vector3(0, 0, 0)) + 0.2, 0.0)
+	else:
+		spawn_u.y = ground_u_at(spawn_u) + 0.2
 	movement.reset(spawn_u)
 	settings = GameSettings.new()
 	settings.load_settings()
@@ -67,6 +76,9 @@ func _ready() -> void:
 	audio.update_settings(settings)
 	loadout = Loadout.new(WeaponData.Team.T, 16000)
 	loadout.give(WeaponData.WeaponId.AK47)
+	for grenade_id in [WeaponData.WeaponId.HE, WeaponData.WeaponId.FLASH,
+			WeaponData.WeaponId.SMOKE, WeaponData.WeaponId.MOLOTOV]:
+		loadout.give(grenade_id)
 	loadout.select(Loadout.Slot.PRIMARY)
 	anim = WeaponAnimController.new()
 	var start_wi = loadout.active()
@@ -98,8 +110,15 @@ func _setup_world() -> void:
 	world = VoxelWorldStore.new()
 	world.bounds_min = Vector3i(-128, -8, -128)
 	world.bounds_max = Vector3i(128, 64, 128)
-	# CC0-карта Oasis (Hard Cover), сконвертированная в VMAP
-	var res = VoxelMapLoader.load_map("res://assets/maps/oasis.vmap", world)
+	selected_map = _read_selected_map()
+	var map_file: String = "oasis.vmap"
+	var wanted: String = "res://assets/maps/" + selected_map + ".vmap"
+	if FileAccess.file_exists(wanted):
+		map_file = selected_map + ".vmap"
+	else:
+		selected_map = "oasis"
+	var res = VoxelMapLoader.load_map("res://assets/maps/" + map_file, world)
+	set_meta("map_loaded_by_main", true)
 	if not res.ok or int(res.loaded) == 0:
 		# fallback: простая коробка
 		world.bounds_min = Vector3i(-8, -8, -8)
@@ -150,6 +169,104 @@ func _setup_mesh() -> void:
 		map_meshes.append(mi)
 		if mesh_instance == null:
 			mesh_instance = mi
+
+
+func _current_grenade_type() -> int:
+	if loadout == null:
+		return -1
+	var wi = loadout.active()
+	if wi == null or wi.mag <= 0:
+		return -1
+	match loadout.selected:
+		Loadout.Slot.GRENADE_FLASH_1, Loadout.Slot.GRENADE_FLASH_2:
+			return GrenadeSystem.Type.FLASH
+		Loadout.Slot.GRENADE_SMOKE:
+			return GrenadeSystem.Type.SMOKE
+		Loadout.Slot.GRENADE_FIRE:
+			return GrenadeSystem.Type.MOLOTOV if loadout.team == WeaponData.Team.T 				else GrenadeSystem.Type.INCENDIARY
+		Loadout.Slot.GRENADE_HE_DECOY:
+			if wi.id == WeaponData.WeaponId.DECOY:
+				return GrenadeSystem.Type.DECOY
+			return GrenadeSystem.Type.HE
+	return -1
+
+
+func _throw_grenade(throw_type: int) -> void:
+	if grenades == null or loadout == null or movement == null:
+		return
+	if hud != null and hud.is_ui_open():
+		return
+	var gtype: int = _current_grenade_type()
+	if gtype < 0:
+		if hud != null:
+			hud.message("Нет гранаты — выберите 4")
+		return
+	var wi = loadout.active()
+	wi.mag -= 1
+	var dir: Vector3 = Vector3.FORWARD if camera == null else -camera.global_transform.basis.z
+	var origin_u: Vector3 = movement.pos_u + Vector3(0, 75.0, 0) + dir * 12.0
+	grenades.throw_grenade(gtype, origin_u, dir, throw_type, 0, loadout.team,
+			movement.vel_u, not movement.on_ground)
+	if hud != null:
+		hud.message("Бросок гранаты")
+
+
+func _sync_grenade_meshes() -> void:
+	if grenades == null:
+		return
+	var alive: Dictionary = {}
+	for g in grenades.active:
+		alive[g] = true
+		var mi: MeshInstance3D = grenade_meshes.get(g) as MeshInstance3D
+		if mi == null:
+			var sphere := SphereMesh.new()
+			sphere.radius = 0.045
+			sphere.height = 0.09
+			sphere.radial_segments = 12
+			sphere.rings = 8
+			mi = MeshInstance3D.new()
+			mi.name = "Grenade"
+			mi.mesh = sphere
+			add_child(mi)
+			grenade_meshes[g] = mi
+		mi.position = g.pos * 0.01905
+	for g in grenade_meshes.keys():
+		if not alive.has(g):
+			var old: MeshInstance3D = grenade_meshes[g] as MeshInstance3D
+			if is_instance_valid(old):
+				old.queue_free()
+			grenade_meshes.erase(g)
+
+
+func _spawn_u_from_config() -> Vector3:
+	var path: String = "res://assets/maps/" + selected_map + "_spawns.json"
+	if not FileAccess.file_exists(path):
+		return Vector3.ZERO
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return Vector3.ZERO
+	var json := JSON.new()
+	if json.parse(f.get_as_text()) != OK or not (json.data is Dictionary):
+		f.close()
+		return Vector3.ZERO
+	f.close()
+	var raw = json.data.get("CT", [])
+	if not (raw is Array) or (raw as Array).size() < 3:
+		return Vector3.ZERO
+	return Vector3(float(raw[0]), float(raw[1]), float(raw[2])) / 19.05
+
+
+func _read_selected_map() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://selected_map.cfg") != OK:
+		return "oasis"
+	var id := String(cfg.get_value("map", "id", "oasis"))
+	match id:
+		"Oasis", "oasis": return "oasis"
+		"Training Arena", "training_arena": return "training_arena"
+		"Voxel Buildings", "buildings_12": return "buildings_12"
+		"Medieval Voxels", "medieval_prop_0": return "medieval_prop_0"
+	return "oasis"
 
 
 func _setup_environment() -> void:
@@ -243,7 +360,8 @@ func _process(delta: float) -> void:
 		if Input.is_key_pressed(KEY_W): move_z += 1.0
 		if Input.is_key_pressed(KEY_S): move_z -= 1.0
 		if Input.is_key_pressed(KEY_SPACE): buttons |= MovementModel.Buttons.JUMP
-		if Input.is_key_pressed(KEY_CTRL): buttons |= MovementModel.Buttons.CROUCH
+		if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_C):
+			buttons |= MovementModel.Buttons.CROUCH
 		if Input.is_key_pressed(KEY_SHIFT): buttons |= MovementModel.Buttons.WALK
 	var yaw_units: int = int(posmod(yaw / TAU, 1.0) * 65536.0) % 65536
 	var pitch_units: int = int(clampf(pitch / 1.2, -1.0, 1.0) * 32767.0)
@@ -251,6 +369,9 @@ func _process(delta: float) -> void:
 	if not paused:
 		movement.step(buttons, move_x, move_z, yaw_units, pitch_units, delta,
 				Callable(self, "ground_u_at"), no_ladder)
+	if grenades != null:
+		grenades.step(delta, Callable(self, "ground_u_at"))
+		_sync_grenade_meshes()
 
 	# камера
 	if camera != null:
@@ -384,7 +505,9 @@ func ground_u_at(p_u: Vector3) -> float:
 	var v: Vector3i = world.world_mm_to_voxel(p_mm)
 	for yy in range(v.y + 2, int(world.bounds_min.y) - 1, -1):
 		if world.get_sdf_voxel(Vector3i(v.x, yy, v.z)) <= 0:
-			return float(yy + 1) * float(world.voxel_size_mm) / 19.05
+			var surface_u: float = float(yy + 1) * float(world.voxel_size_mm) / 19.05
+			if surface_u <= p_u.y + 18.0:
+				return surface_u
 	return 0.0
 
 
@@ -468,6 +591,10 @@ func _input(event: InputEvent) -> void:
 			pitch = clamp(pitch, -1.2, 1.2)
 			vm_look += event.relative
 	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			if hud == null or not hud.is_ui_open():
+				_throw_grenade(GrenadeSystem.ThrowType.SHORT)
+			return
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if hud != null and hud.is_ui_open():
 				return
@@ -491,9 +618,11 @@ func _input(event: InputEvent) -> void:
 			KEY_R:
 				if hud == null or not hud.pause_open:
 					_start_reload()
-			KEY_F:
+			KEY_F, KEY_I:
 				if anim != null and (hud == null or not hud.pause_open):
 					anim.request_inspect()
+			KEY_G:
+				_throw_grenade(GrenadeSystem.ThrowType.LONG)
 			KEY_Q:
 				if anim != null and (hud == null or not hud.pause_open):
 					anim.request_melee()
