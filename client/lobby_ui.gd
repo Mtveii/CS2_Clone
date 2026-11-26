@@ -134,6 +134,11 @@ const EQUIPMENT_CATEGORIES: Array = [
 # контент, которого в сборке нет.
 const MAP_GROUPS: Array = [
 	{"name": "Oasis", "file": "oasis.vmap", "group": "Hard Cover • CC0", "wait": "00:30", "color": Color(0.58, 0.48, 0.30)},
+	{"name": "Training Arena", "file": "training_arena.vmap", "group": "Процедурный тест • изолированный", "wait": "00:30", "color": Color(0.30, 0.52, 0.42)},
+	{"name": "Voxel Buildings", "file": "buildings_12.vmap", "group": "Mehrasaur • free", "wait": "00:30", "color": Color(0.42, 0.46, 0.56)},
+	{"name": "Medieval Voxels", "file": "medieval_prop_0.vmap", "group": "FuzzyManStudios • CC0-style", "wait": "00:45", "color": Color(0.52, 0.40, 0.30)},
+	{"name": "Desert Town", "source_file": "res://assets/voxel_sources/desert_town_tall_building.vox", "source_only": true, "group": "Max Parata • CC BY-ND", "wait": "—", "color": Color(0.32, 0.32, 0.34)},
+	{"name": "Tiny Voxel Dungeon", "source_file": "res://assets/voxel_sources/tiny_dungeon_dragon_room.vox", "source_only": true, "group": "Max Parata • CC BY-ND", "wait": "—", "color": Color(0.28, 0.30, 0.32)},
 ]
 
 
@@ -1443,21 +1448,28 @@ func _build_map_grid() -> void:
 	var maps: Array = MAP_GROUPS if play_mode != "БОЙ НАСМЕРТЬ" else MAP_GROUPS
 	for i in range(maps.size()):
 		var m: Dictionary = maps[i]
+		var source_only: bool = bool(m.get("source_only", false))
 		var card := PanelContainer.new()
 		card.custom_minimum_size = Vector2(240, 230)
-		var sb := _mk_sb(m.color, Color(0.35, 0.4, 0.45))
+		card.tooltip_text = String(m.group)
+		var sb := _mk_sb(m.color if not source_only else m.color.darkened(0.25), Color(0.35, 0.4, 0.45))
 		card.add_theme_stylebox_override("panel", sb)
 		var v := VBoxContainer.new()
 		card.add_child(v)
 		var check := CheckButton.new()
-		check.button_pressed = i < 2
+		check.button_pressed = i < 2 and not source_only
+		check.disabled = source_only
 		v.add_child(check)
 		var badge := ColorRect.new()
 		badge.color = m.color.lightened(0.15)
 		badge.custom_minimum_size = Vector2(0, 70)
 		v.add_child(badge)
-		v.add_child(_label(String(m.name), 16, C_TEXT))
-		v.add_child(_label(String(m.group) + "   ◷ " + String(m.wait), 10, C_DIM))
+		v.add_child(_label(String(m.name), 16, C_TEXT if not source_only else C_DIM))
+		if source_only:
+			v.add_child(_label("ТОЛЬКО ИСТОЧНИК .vox", 10, C_FAINT))
+			v.add_child(_label("CC BY-ND — без конвертации", 10, C_WARN))
+		else:
+			v.add_child(_label(String(m.group) + "   ◷ " + String(m.wait), 10, C_DIM))
 		play_map_grid.add_child(card)
 
 
