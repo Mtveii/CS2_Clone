@@ -17,6 +17,7 @@ const GameHUD = preload("res://client/game_hud.gd")
 const PlayerState = preload("res://shared/gameplay/player_state.gd")
 const WeaponViewModelScript = preload("res://client/weapon_viewmodel.gd")
 const GrenadeSystem = preload("res://shared/gameplay/grenades.gd")
+const MapMeshCache = preload("res://shared/voxel/map_mesh_cache.gd")
 
 const VIEWMODEL_BASE := Vector3(0.28, -0.25, -0.55)
 
@@ -158,7 +159,7 @@ func _setup_mesh() -> void:
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	map_meshes.clear()
 	for cc in world.all_chunk_coords():
-		var mesh = VoxelMeshGen.build(world, cc, VoxelMeshGen.SURFACE_NETS)
+		var mesh = MapMeshCache.get_or_build(world, cc, selected_map)
 		if mesh == null:
 			continue
 		var mi := MeshInstance3D.new()
