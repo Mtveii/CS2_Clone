@@ -9,6 +9,7 @@
   magic 'VMAP', version u32, voxel_size_mm u32, count u32,
   записи: int16 x, int16 y, int16 z, uint8 material
 """
+import argparse
 import struct
 import sys
 import os
@@ -76,26 +77,36 @@ def material_for(ci, palette):
 
 
 def main():
-    src = sys.argv[1] if len(sys.argv) > 1 else 'oasis.vox'
-    out = sys.argv[2] if len(sys.argv) > 2 else 'assets/maps/oasis.vmap'
-    models, palette = parse(src)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('src', nargs='?', default='oasis.vox')
+    parser.add_argument('out', nargs='?', default='assets/maps/oasis.vmap')
+    parser.add_argument('--scale', type=int, default=SCALE,
+                        help='voxel expansion factor (1 for props, 3 for Oasis)')
+    parser.add_argument('--model', type=int, default=0,
+                        help='model index inside a multi-model .vox')
+    args = parser.parse_args()
+    scale = max(1, args.scale)
+    out = args.out
+    models, palette = parse(args.src)
     if not models:
         raise SystemExit('no models')
-    m = models[0]
-    print(f'model 0 size={m["size"]} voxels={len(m["vox"])} palette={"yes" if palette else "no"}')
+    if args.model >= len(models):
+        raise SystemExit(f'model {args.model} out of range ({len(models)})')
+    m = models[args.model]
+    print(f'model {args.model} size={m["size"]} voxels={len(m["vox"])} palette={"yes" if palette else "no"} scale={scale}')
 
     sx, sy, sz = m['size']
-    ox = -sx * SCALE // 2
-    oz = -sy * SCALE // 2
+    ox = -sx * scale // 2
+    oz = -sy * scale // 2
     records = []
     for x, y, z, ci in m['vox']:
         mat = MAT_WOOD if z >= sz - 2 else material_for(ci, palette)
-        for dz in range(SCALE):
-            for dy in range(SCALE):
-                for dx in range(SCALE):
-                    wx = ox + x * SCALE + dx
-                    wy = (sz - 1 - z) * SCALE + dz
-                    wz = oz + y * SCALE + dy
+        for dz in range(scale):
+            for dy in range(scale):
+                for dx in range(scale):
+                    wx = ox + x * scale + dx
+                    wy = (sz - 1 - z) * scale + dz
+                    wz = oz + y * scale + dy
                     records.append((wx, wy, wz, mat))
 
     os.makedirs(os.path.dirname(out), exist_ok=True)

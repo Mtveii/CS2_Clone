@@ -1,0 +1,35 @@
+{
+  "maps": [
+    {
+      "id": "training_arena",
+      "file": "training_arena.vmap",
+      "offset_m": [
+        200,
+        0,
+        0
+      ],
+      "collisions": "training_arena_collision.json",
+      "spawns": "training_arena_spawns.json",
+      "objectives": "training_arena_objectives.json"
+    },
+    {
+      "id": "buildings_12",
+      "file": "buildings_12.vmap",
+      "offset_m": [
+        400,
+        0,
+        0
+      ],
+      "collisions": "buildings_12_collision.json"
+    },
+    {
+      "id": "medieval_prop_0",
+      "file": "medieval_prop_0.vmap",
+      "offset_m": [
+        600,
+        0,
+        0
+      ]
+    }
+  ]
+}

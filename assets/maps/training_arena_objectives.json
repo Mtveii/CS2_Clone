@@ -1,0 +1,6 @@
+{
+  "sites": [
+    {"name": "A", "center": [194, 0.1, -10], "radius": 2.0},
+    {"name": "B", "center": [206, 0.1, 10], "radius": 2.0}
+  ]
+}

@@ -96,6 +96,7 @@ var watch_actions: HBoxContainer
 var watch_tab: String = "ВАШИ МАТЧИ"
 var watch_tabs: Dictionary = {}
 var play_map_grid: GridContainer = null
+var selected_map_id: String = "oasis"
 var play_mode_tabs: Array = []
 var play_start_button: Button
 var play_modes_back: Button
@@ -134,6 +135,11 @@ const EQUIPMENT_CATEGORIES: Array = [
 # контент, которого в сборке нет.
 const MAP_GROUPS: Array = [
 	{"name": "Oasis", "file": "oasis.vmap", "group": "Hard Cover • CC0", "wait": "00:30", "color": Color(0.58, 0.48, 0.30)},
+	{"name": "Training Arena", "file": "training_arena.vmap", "group": "Процедурный тест • изолированный", "wait": "00:30", "color": Color(0.30, 0.52, 0.42)},
+	{"name": "Voxel Buildings", "file": "buildings_12.vmap", "group": "Mehrasaur • free", "wait": "00:30", "color": Color(0.42, 0.46, 0.56)},
+	{"name": "Medieval Voxels", "file": "medieval_prop_0.vmap", "group": "FuzzyManStudios • CC0-style", "wait": "00:45", "color": Color(0.52, 0.40, 0.30)},
+	{"name": "Desert Town", "source_file": "res://assets/voxel_sources/desert_town_tall_building.vox", "source_only": true, "group": "Max Parata • CC BY-ND", "wait": "—", "color": Color(0.32, 0.32, 0.34)},
+	{"name": "Tiny Voxel Dungeon", "source_file": "res://assets/voxel_sources/tiny_dungeon_dragon_room.vox", "source_only": true, "group": "Max Parata • CC BY-ND", "wait": "—", "color": Color(0.28, 0.30, 0.32)},
 ]
 
 
@@ -141,6 +147,9 @@ func _ready() -> void:
 	settings = GameSettings.new()
 	settings.load_settings()
 	loadout = Loadout.new(WeaponData.Team.T, 16000)
+	var map_cfg := ConfigFile.new()
+	if map_cfg.load("user://selected_map.cfg") == OK:
+		selected_map_id = String(map_cfg.get_value("map", "id", "oasis"))
 	world = get_parent().get_node_or_null("LobbyWorld")
 	if world != null:
 		agent_data = world.agent_data
@@ -697,6 +706,15 @@ func _select_tab(tab: String) -> void:
 
 func _set_status(msg: String) -> void:
 	status_label.text = msg
+
+
+func _select_map(map_name: String) -> void:
+	selected_map_id = map_name
+	var cfg := ConfigFile.new()
+	cfg.set_value("map", "id", map_name)
+	cfg.save("user://selected_map.cfg")
+	_build_map_grid()
+	_set_status("Карта выбрана: " + map_name)
 
 
 func _launch_game(msg: String) -> void:
@@ -1443,21 +1461,36 @@ func _build_map_grid() -> void:
 	var maps: Array = MAP_GROUPS if play_mode != "БОЙ НАСМЕРТЬ" else MAP_GROUPS
 	for i in range(maps.size()):
 		var m: Dictionary = maps[i]
+		var source_only: bool = bool(m.get("source_only", false))
 		var card := PanelContainer.new()
 		card.custom_minimum_size = Vector2(240, 230)
-		var sb := _mk_sb(m.color, Color(0.35, 0.4, 0.45))
+		card.tooltip_text = String(m.group)
+		var sb := _mk_sb(m.color if not source_only else m.color.darkened(0.25), Color(0.35, 0.4, 0.45))
 		card.add_theme_stylebox_override("panel", sb)
 		var v := VBoxContainer.new()
 		card.add_child(v)
 		var check := CheckButton.new()
-		check.button_pressed = i < 2
+		check.button_pressed = i < 2 and not source_only
+		check.disabled = source_only
 		v.add_child(check)
 		var badge := ColorRect.new()
 		badge.color = m.color.lightened(0.15)
 		badge.custom_minimum_size = Vector2(0, 70)
 		v.add_child(badge)
-		v.add_child(_label(String(m.name), 16, C_TEXT))
-		v.add_child(_label(String(m.group) + "   ◷ " + String(m.wait), 10, C_DIM))
+		v.add_child(_label(String(m.name), 16, C_TEXT if not source_only else C_DIM))
+		if source_only:
+			v.add_child(_label("ТОЛЬКО ИСТОЧНИК .vox", 10, C_FAINT))
+			v.add_child(_label("CC BY-ND — без конвертации", 10, C_WARN))
+		else:
+			v.add_child(_label(String(m.group) + "   ◷ " + String(m.wait), 10, C_DIM))
+			var click := Button.new()
+			click.name = "Select_" + String(m.get("name", "map"))
+			click.set_anchors_preset(Control.PRESET_FULL_RECT)
+			click.flat = true
+			click.modulate = Color(1, 1, 1, 0.001)
+			var map_name: String = String(m.get("name", "Oasis"))
+			click.pressed.connect(func(): _select_map(map_name))
+			card.add_child(click)
 		play_map_grid.add_child(card)
 
 

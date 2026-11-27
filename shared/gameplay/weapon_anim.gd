@@ -126,7 +126,7 @@ func request_reload() -> bool:
 
 
 func request_inspect() -> bool:
-	if state != State.IDLE:
+	if state == State.RELOAD or state == State.INSPECT:
 		return false
 	state = State.INSPECT
 	timer = inspect_time

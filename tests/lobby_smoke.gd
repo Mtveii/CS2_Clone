@@ -90,12 +90,29 @@ func _init() -> void:
 	_check(ui.play_modes_panel.visible, "экран Подбор")
 	_check(ui.play_mode_tabs.size() == 9, "9 режимов")
 	_check(ui.map_grid_ready(), "карточки карт построены")
+	_check(ui.play_map_grid.get_child_count() == 6,
+		"в сетке 6 карточек загруженных карт (%d)" % ui.play_map_grid.get_child_count())
+	var disabled_cards: int = 0
+	for card in ui.play_map_grid.get_children():
+		var check: CheckButton = (card.get_child(0) as VBoxContainer).get_child(0) as CheckButton
+		if check != null and check.disabled:
+			disabled_cards += 1
+	_check(disabled_cards == 2, "2 CC BY-ND карты отмечены как исходники (%d)" % disabled_cards)
 	var real_maps: int = 0
+	var source_maps: int = 0
+	var playable: int = 0
 	for m in ui.MAP_GROUPS:
-		if FileAccess.file_exists("res://assets/maps/" + String(m.get("file", ""))):
-			real_maps += 1
-	_check(real_maps > 0 and real_maps == ui.MAP_GROUPS.size(),
-			"в списке только реально существующие карты (%d)" % real_maps)
+		if bool(m.get("source_only", false)):
+			if FileAccess.file_exists(String(m.get("source_file", ""))):
+				source_maps += 1
+		else:
+			playable += 1
+			if FileAccess.file_exists("res://assets/maps/" + String(m.get("file", ""))):
+				real_maps += 1
+	_check(real_maps == playable and playable > 0,
+			"все играбельные карты имеют .vmap (%d/%d)" % [real_maps, playable])
+	_check(source_maps == 2, "CC BY-ND источники показаны как исходники (%d)" % source_maps)
+	_check(ui.MAP_GROUPS.size() == 6, "в меню 6 загруженных карт (%d)" % ui.MAP_GROUPS.size())
 
 	# настройки: 5 вкладок, без выбора фона в Изображении
 	ui._open_settings()

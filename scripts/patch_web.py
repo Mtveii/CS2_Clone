@@ -109,6 +109,13 @@ HTML = """
 	});
 	updateButton();
 
+	// Клавиши W/A/S/D, B, R, F, G и Space доходят до Godot только когда
+	// canvas в фокусе. Возвращаем фокус при любом input на странице.
+	var canvas = document.getElementById('canvas');
+	function focusCanvas() { if (canvas) canvas.focus(); }
+	document.addEventListener('keydown', focusCanvas, true);
+	document.addEventListener('pointerdown', focusCanvas, true);
+
 	// Одинаковое поведение в браузерах с разной поддержкой WebGL2.
 	function hasWebGL2() {
 		try {

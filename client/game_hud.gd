@@ -305,7 +305,7 @@ func set_mouse_captured(captured: bool) -> void:
 		mouse_hint.visible = not captured and not is_ui_open()
 	if hint_label != null:
 		if captured:
-			hint_label.text = "ЛКМ — огонь  •  R — перезарядка  •  B — закупка  •  1/2/3 — оружие  •  F — осмотр  •  Esc — меню"
+			hint_label.text = "ЛКМ — огонь  •  R — перезарядка  •  B — закупка  •  1/2/3/4 — оружие  •  F/I — осмотр  •  G/ПКМ — граната  •  C — присед  •  Shift — шаг  •  Esc — меню"
 		else:
 			hint_label.text = "Кликните по экрану, чтобы захватить мышь"
 
@@ -348,6 +348,9 @@ func _fill_cat(cat: String) -> void:
 	for id in WeaponData.WEAPONS.keys():
 		var w: Dictionary = WeaponData.get_weapon(id)
 		if String(w.get("slot", "")) != cat:
+			continue
+		var team: int = int(w.get("team", WeaponData.Team.ANY))
+		if loadout != null and team != WeaponData.Team.ANY and team != loadout.team:
 			continue
 		var p := PanelContainer.new()
 		p.custom_minimum_size = Vector2(190, 100)
